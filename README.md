@@ -49,8 +49,8 @@ The application runs on a dedicated host machine, acting as the resource manager
 - Python: Python 3.x and pip.
 
 ## Usage
-### Admin Access
-1. Navigate to the Admin Login page (URL will depend on your host setup).
+### Admin Access (run by "python3 admin.py")
+1. Navigate to the Admin Login page (URL will depend on your host setup). 
 2. Default Credentials (Change for production):
   - Username: admin
   - Password: 123456
@@ -59,7 +59,7 @@ The application runs on a dedicated host machine, acting as the resource manager
   - Requests: Approve or reject pending super user resource requests.
   - Settings: Set the Global Resource Limits for any single user.
 
-### User Access
+### User Access (run by "python3 app.py")
 1. Register/Login: Create an account on the main application page.
 2. Request Resources: Submit a request for the required CPU/RAM/Disk resources on the Dashboard page.
 3. Wait for Approval (only super request): For super request, the request moves to a pending state until approved by the Admin.
