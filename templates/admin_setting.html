@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Restrictions</title>
+    <style>
+        body { font-family: sans-serif; padding: 40px; background: #f4f6f9; }
+        .box { background: white; padding: 30px; border-radius: 8px; max-width: 500px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 10px; margin: 10px 0 20px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .btn { padding: 10px 20px; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
+        .btn-save { background-color: #c0392b; } /* Red to indicate restriction */
+        .btn-cancel { background-color: #95a5a6; display: block; text-align: center; text-decoration: none; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h2>⛔ Global Resource Limits</h2>
+    <p>Set the maximum resources ANY single user can request.</p>
+    
+    <form method="POST">
+        <label>Max CPU Cores per User:</label>
+        <input type="number" name="max_cpu" step="0.5" value="{{ limits.max_cpu }}" required>
+
+        <label>Max MEMORY per User (GB):</label>
+        <input type="number" name="max_memory_gb" step="1" value="{{ limits.max_memory_gb }}" required>
+
+        <label>Max RAM per User (GB):</label>
+        <input type="number" name="max_ram_gb" step="1" value="{{ limits.max_ram_gb }}" required>
+
+        <button type="submit" class="btn btn-save">Save Restrictions</button>
+        <a href="/" class="btn btn-cancel">Cancel</a>
+    </form>
+</div>
+</body>
+</html>

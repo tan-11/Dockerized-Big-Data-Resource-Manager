@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+    <title>Admin Monitoring</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1100px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #222;
+            font-weight: 600;
+        }
+
+        .home-link {
+            display: inline-block;
+            margin-bottom: 25px;
+            text-decoration: none;
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        }
+
+        th {
+            background-color: #f8f9fa;
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: 600;
+            border-bottom: 1px solid #e3e6ea;
+            font-size: 14px;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background-color: #f5f7fa;
+        }
+
+        .container-id {
+            font-family: monospace;
+            font-weight: 500;
+            color: #444;
+        }
+
+        .status-running {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .status-stopped {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .actions form {
+            display: inline-block;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .btn-stop {
+            background-color: #9e585f;
+            color: white;
+        }
+
+        .btn-start {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-delete {
+            background-color: #e61111;
+            color: white;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            font-size: 15px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <a href="/logout" class="home-link">Logout</a>
+    <a href="/settings" class="home-link" style="background-color: #e67e22;">Global Limits</a>
+    <a href="/requests" class="home-link" style="background-color:#12ed42">Super User Request</a>
+    
+    <h2>Container Monitoring</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Image</th>
+                <th>Status</th>
+                <!-- NEW COLUMNS ADDED HERE -->
+                <th>CPU Cores</th>
+                <th>Memory (MB)</th>
+                <th>Ports</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for container in containers %}
+            <tr>
+                <td class="container-id">{{ container.ID[:12] }}</td>
+                <td>{{ container.Names }}</td>
+                <td>{{ container.Image }}</td>
+                <td>
+                    {% if container.Status == 'Running' %}
+                        <span class="status-running">{{ container.Status }}</span>
+                    {% else %}
+                        <span class="status-stopped">{{ container.FullStatus }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ "%.2f"|format(container.CPUs) }}</td>
+                <td>{{ "%.0f"|format(container.MemoryMB) }}</td>
+                <td>{{ container.Ports }}</td>
+                <td class="actions">
+                    {% if container.Status == 'Running' %}
+                        <form action="/stop/{{ container.ID }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-stop">Stop</button>
+                        </form>
+                    {% else %}
+                        <form action="/start/{{ container.ID }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-start">Start</button>
+                        </form>
+                        <form action="/delete/{{ container.ID }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn btn-delete">Delete</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 20px;">No containers found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

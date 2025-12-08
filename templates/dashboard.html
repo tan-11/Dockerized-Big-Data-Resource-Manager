@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Dashboard</title>
+    <style>
+        /* General Page Layout */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: white;
+            color: darkslategray;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .header h1 { margin: 0; font-size: 24px; color: black; }
+
+        /* Card Style */
+        .card { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px black;
+        }
+
+        .card h2 { margin-top: 0; font-size: 20px; border-bottom: 2px solid white; padding-bottom: 15px; margin-bottom: 20px;}
+
+        /* --- NEW: Resource Box Style --- */
+        .resource-box {
+            background-color: wheat; /* Light Blue background */
+            border: 1px solid white;
+            border-radius: 6px;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+        }
+        .resource-box h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: blue;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .resource-stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .stat-label { font-weight: 600; color: grey; }
+        .stat-value { font-family: monospace; font-size: 1.1em; color: black; }
+        /* ------------------------------- */
+
+        /* Status Colors */
+        .status-running { color: green; font-weight: bold; }
+        .status-stopped { color: orange; font-weight: bold; }
+
+        /* Form Elements */
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: grey; }
+        input[type="number"], select, textarea {
+            width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid rgb(226, 215, 215); border-radius: 6px; box-sizing: border-box;
+        }
+
+        /* Buttons */
+        .btn { 
+            padding: 12px 20px; cursor: pointer; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-stop { background-color: orange; }
+        .btn-start { background-color: green; }
+        .btn-delete { background-color: red; }
+        .btn-logout { background-color: grey; text-decoration: none; display: inline-block; padding: 8px 15px; }
+        
+        .actions { margin-top: 25px; padding-top: 20px; border-top: 1px solid white; display: flex; gap: 10px; }
+    </style>
+</head>
+
+<script>
+    function preventDoubleSubmit(form) {
+        // 1. Find the submit button
+        const btn = form.querySelector('button[type="submit"]');
+        
+        // 2. Change the text to show activity
+        btn.innerHTML = "Creating Environment... Please Wait";
+        
+        // 3. Change style to look 'disabled'
+        btn.style.backgroundColor = "#95a5a6"; // Grey color
+        btn.style.cursor = "not-allowed";
+        
+        // 4. Disable the button so they can't click again
+        // We use a tiny timeout to ensure the form submission signal actually leaves the browser
+        setTimeout(() => {
+            btn.disabled = true;
+        }, 10);
+
+        // 5. Allow the form to continue submitting
+        return true;
+    }
+</script>
+
+<body>
+    <div class="container">
+        
+        <div class="header">
+            <h1>Welcome, {{ username }}</h1>
+            <a href="/logout" class="btn btn-logout">Logout</a>
+        </div>
+
+        {% if container %}
+        <div class="card">
+            <h2>Your Workspace</h2>
+            <p><strong>Status:</strong> <span class="{{ 'status-running' if 'Running' in container.FullStatus else 'status-stopped' }}">{{ container.FullStatus }}</span></p>
+            <p><strong>SSH Port:</strong> {{ ssh_port }}</p>
+            <p><strong>Allocated Resources:</strong> {{ container.CPUs }} Cores / {{ container.MemoryMB }} MB RAM</p>
+            
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border: 1px solid #bbdefb; margin: 15px 0;">
+                    <strong>🔑 Access Key:</strong>
+                    <p style="margin: 5px 0 10px 0; font-size: 0.9em;">
+                        You need the private key file (<code>.pem</code>) to login.
+                    </p>
+                    <a href="/download_key" style="text-decoration: none;">
+                        <button class="btn" style="background-color: #34495e; color: white;">⬇️ Download {{ username }}_key.pem</button>
+                    </a>
+                </div>
+
+                {% if 'Running' in container.FullStatus %}
+                <div style="margin-top: 20px;">
+                    <label style="font-weight: bold;">📋 SSH Command:</label>
+                    <div style="background: #2d3436; color: #81ecec; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 14px;">
+                        # 1. Fix permission (Run once in your terminal)
+                        <br>chmod 400 ~/Downloads/{{ username }}_key.pem
+                        <br><br>
+                        # 2. Login
+                        <br>ssh -i ~/Downloads/{{ username }}_key.pem {{ username }}@10.123.30.37 -p {{ ssh_port }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <p style="color: #666; font-size: 0.9em; background: white; padding: 10px; border-radius: 4px;">
+                    💡 <em>Your data is saved in the 'workspace' folder. It persists even if you delete this container.</em>
+                </p>
+
+                <div class="actions">
+                    {% if 'Running' in container.FullStatus %}
+                        <form action="/control/stop" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-stop">Stop Container</button>
+                        </form>
+                    {% else %}
+                        <form action="/control/start" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-start">Start Container</button>
+                        </form>
+                    {% endif %}
+
+                    <form action="/control/delete" method="post" style="display:inline;" onsubmit="return confirm('Are you sure? This deletes the container but keeps your data safe on the server.');">
+                        <button type="submit" class="btn btn-delete">Delete & Free Resources</button>
+                    </form>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="card">
+                <h2>Request New Resources</h2>
+                
+                <div class="resource-box">
+                    <h3>Host Status</h3>
+                    <div class="resource-stat-row">
+                        <span class="stat-label">CPU Available:</span>
+                        <span class="stat-value">{{ cores_available|round(2) }} / {{ host_total_cores }} Cores</span>
+                    </div>
+                    <div class="resource-stat-row">
+                        <span class="stat-label">Ram Available:</span>
+                        <span class="stat-value">{{ ram_available_gb|round|int }} / {{ host_total_ram_gb|round|int }} GB</span>
+                    </div>
+                    <div class="resource-stat-row">
+                        <span class="stat-label">Dick Storage Available:</span>
+                        <span class="stat-value">{{host_free_disk_gb|round(1)}} / {{host_total_disk_gb|round(1)}} GB</span>
+                    </div>
+                </div>
+
+                <form action="/request" method="POST" onsubmit="preventDoubleSubmit(this)">
+                    <input type="hidden" name="username" value="{{ username }}">
+                    
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <label>CPU Cores (Max {{ max_cpu }}):</label>
+                            <input type="number" name="cpus" step="0.5" min="0.5" max="{{max_cpu}}" placeholder="e.g. 2" required>
+                        </div>
+                        
+                        <div style="flex: 1;">
+                            <label>Ram (in GB) (Max {{max_ram_gb}}):</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="number" name="Ram" placeholder="e.g. 4" required style="flex: 2;" max="{{max_ram_gb}}">
+                            </div>
+                        </div>
+
+                        <div style="flex: 1;">
+                            <label>Memory (in GB) (Max {{max_mem_gb}}):</label>
+                            <div style="display: flex; gap: 10px;">
+                                {% if has_existing_disk %}
+                                <input type="number" name="memory" placeholder="e.g. 5" required style="flex: 2;" min="5" max="{{max_mem_gb}}" value="{{existing_disk_size}}" disabled>
+                                {% else %}
+                                <input type="number" name="memory" placeholder="e.g. 5" required style="flex: 2;" max="{{max_mem_gb}}">
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-start" style="width: 100%; margin-top: 10px;">Create Container</button>
+                    ℹ️ <strong>Note:</strong> A new SSH Key Pair (.pem file) will be generated for you automatically when you click Create.
+                    </div>
+                </form>
+                {% if has_existing_disk %}
+                    <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 15px; margin: 15px 0; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            
+                            <div>
+                                <strong>💾 Storage Detected:</strong> 
+                                <br>You have a saved disk ({{ existing_disk_size }} GB).
+                                <br><small style="color: #666;">This disk will be attached if you create a container now.</small>
+                            </div>
+
+                            <form action="/delete_disk" method="POST" onsubmit="return confirm('⚠️ PERMANENT DATA LOSS WARNING ⚠️\n\nAre you sure you want to delete your persistent volume?\n\n- All files will be lost forever.\n- Your SSH keys will be deleted.\n- This cannot be undone.');">
+                                <button type="submit" style="background-color: #c0392b; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                                    🗑️ Delete Volume
+                                </button>
+                            </form>
+
+                        </div>
+                    </div>
+                {% endif %}
+                <div style="margin-top: 30px; border-top: 2px dashed #ccc; padding-top: 20px;">
+                    <h3 style="color: #8e44ad;">Super User Request</h3>
+                    <p>Need more resources than the global limit? Submit a request to the Admin.</p>
+                    
+                    {% if pending_request %}
+                        <div style="background: #fff3cd; padding: 15px; border-radius: 4px;">
+                            ⏳ <strong>Pending Request:</strong> 
+                            You asked for {{ pending_request.cpu }} Cores / {{ pending_request.memory_gb }} GB RAM / {{pending_request.memory_gb}} GB MEMORY.
+                            <br><em>Waiting for Admin approval...</em>
+                        </div>
+                    {% else %}
+                        <form action="/request_special" method="POST">
+                            <div style="display: flex; gap: 10px;">
+                                <input type="number" name="cpus" placeholder="CPUs (e.g. 8)" max="{{cores_available}}" required>
+                                <input type="number" name="ram" placeholder="RAM" max="{{ram_available_gb}}" required>
+                                {% if has_existing_disk %}
+                                <input type="number" name="memory" placeholder="Memory" value="{{existing_disk_size}}"  disabled>
+                                {%else%}
+                                <input type="number" name="memory" placeholder="Memory" max="{{host_free_disk_gb}}" required>
+                                {%endif%}
+                            </div>
+                            <textarea name="reason" placeholder="Why do you need this? (e.g. Training Deep Learning Model)" required style="width: 100%; margin-top: 10px;"></textarea>
+                            
+                            <button type="submit" class="btn" style="background-color: #8e44ad; width: 100%; margin-top: 10px;">Submit Request</button>
+                        </form>
+                    {% endif %}
+                </div>
+                
+            </div>
+
+            
+        {% endif %}
+        
+    </div>
+</body>
+</html>

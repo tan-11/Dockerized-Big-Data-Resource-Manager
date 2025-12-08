@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - Power Docker Lab</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: white; margin: 0; }
+        .box { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px black; width: 300px; text-align: center; }
+        input { padding: 12px; margin: 10px 0; width: 100%; box-sizing: border-box; border: 1px solid white; border-radius: 4px; }
+        button { padding: 12px; background: green; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px;}
+        button:hover { background: green; }
+        .link { display: block; margin-top: 15px; font-size: 14px; color: blue; text-decoration: none; }
+        .error { color: red; margin-bottom: 10px; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Create Account</h2>
+        {% if error %} <div class="error">{{ error }}</div> {% endif %}
+        
+        <form method="POST">
+            <input type="text" name="username" placeholder="Choose Username" required>
+            <input type="password" name="password" placeholder="Choose Password" required>
+            <button type="submit">Sign Up</button>
+        </form>
+        
+        <a href="/" class="link">Already have an account? Login</a>
+    </div>
+</body>
+</html>

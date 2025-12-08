@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pending Requests</title>
+    <style>
+        /* Add your table styles here */
+        body { font-family: sans-serif; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        .btn { padding: 5px 10px; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Pending Resource Requests</h1>
+    <a href="/">Back to Dashboard</a>
+    
+
+    <table>
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Requested CPU</th>
+                <th>Requested MEMORY</th>
+                <th>Requested RAM</th>
+                <th>Reason</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user, req in requests.items() %}
+            <tr>
+                <td>{{ user }}</td>
+                <td>{{ req.cpu }}</td>
+                <td>{{ req.memory_gb }} MB</td>
+                <td>{{ req.ram_gb }} MB</td>
+                <td>{{ req.reason }}</td>
+                <td>
+                    <form action="/approve/{{ user }}" method="POST" style="display:inline;">
+                        <button class="btn" style="background: green;">Approve</button>
+                    </form>
+                    <form action="/reject/{{ user }}" method="POST" style="display:inline;">
+                        <button class="btn" style="background: red;">Reject</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No pending requests.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
