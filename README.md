@@ -24,6 +24,7 @@ The platform uses a Flask web application for managing user accounts, resource r
 
 ## Technology Stack
 | Component | Technology | Role |
+|:-------------|:-------------|:-------------|
 | Backend Framework | Python | Web Application, User/Admin Logic, Container Management |
 |Containerization | Docker | Isolation, Resource Limiting, Environment Setup |
 | System Info	| psutil, sdutil | Monitoring host and container resources. |
