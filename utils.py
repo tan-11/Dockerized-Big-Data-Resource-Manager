@@ -1,5 +1,4 @@
 # To check Server Resources and Availability
-
 import os
 import subprocess
 import json
@@ -48,9 +47,9 @@ def get_available_resources():
     user_data_dir = os.path.join(base_dir, 'user_data')
 
     total, used, free = shutil.disk_usage(".")
-    host_total_disk_gb = total / (1024**3)
+    host_total_disk_gb = (total / (1024**3)) - 50
     total_allocated_gb = 0
-    print(f"used disk storage: {used}")
+    print(f"used disk storage: {used/(1024**3)}")
     if os.path.exists(user_data_dir):
         for f in os.listdir(user_data_dir):
             if f.endswith('.img'):
@@ -60,7 +59,7 @@ def get_available_resources():
                 total_allocated_gb += os.path.getsize(path)
     
     total_allocated_gb /= (1024**3)
-    host_free_disk_gb = (host_total_disk_gb - total_allocated_gb) - 50
+    host_free_disk_gb = host_total_disk_gb - total_allocated_gb
     
     return {
         "cores_available": host_total_cores - allocated_cpus,
@@ -202,7 +201,7 @@ def save_resource_request(username, cpus, mem_gb, ram_gb, reason):
 
     requests[username] = {
         'cpu': cpus,
-        'memory_gb': int(mem_gb),
+        'memory_gb': int(float(mem_gb)),
         'ram_gb': ram_gb,
         'reason': reason,
         'timestamp': time.time()
@@ -252,7 +251,6 @@ def provision_container(username, cpus, mem_gb, ram_gb):
 
 
         container_name = f"{username}_container"
-        mem_str = f"{mem_gb}m"
 
         cmd = [
             "docker", "run", "-d",
@@ -261,10 +259,38 @@ def provision_container(username, cpus, mem_gb, ram_gb):
             "--memory", ram_gb,         #ram
             "-p", f"{ssh_port}:22",
            
-            "-v", f"{user_data_path}:/home/{username}", 
+            "-v", f"{user_data_path}:/data", 
             "hadoop_container" 
         ]
         subprocess.run(cmd, check=True)
+        
+        # Create subdirectories in the mounted volume for user home and HDFS data
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"mkdir -p /data/home /data/hdfs"], check=True)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"chmod -R 777 /data"], check=True)
+
+        ram_gb = int(ram_gb.lower().replace("g", ""))
+        ram_mb = ram_gb * 1024
+
+        subprocess.run([
+            "docker", "exec", container_name,
+            "bash", "-c",
+            f"""
+            sed -i '/<name>yarn.nodemanager.resource.memory-mb<\\/name>/,/<\\/property>/d' \
+            $HADOOP_HOME/etc/hadoop/yarn-site.xml
+
+            sed -i '/<configuration>/a \
+            <property>\\
+            <name>yarn.nodemanager.resource.memory-mb</name>\\
+            <value>{ram_mb}</value>\\
+            </property>' \
+            $HADOOP_HOME/etc/hadoop/yarn-site.xml
+            """
+        ], check=True)
+
+        subprocess.run(
+            ["docker", "exec", container_name, "bash", "-c", "start-dfs.sh"],
+            check=True
+        )
 
         print("Waiting for HDFS to be ready...")
         hdfs_ready = False
@@ -288,25 +314,208 @@ def provision_container(username, cpus, mem_gb, ram_gb):
             # Depending on your preference, you might want to cleanup and fail here
             print("WARNING: HDFS setup timed out. User may need to start it manually.")
         
-        # 1. create the user
-        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"id -u {username} || useradd -m -s /bin/bash {username}"], check=True)
-        subprocess.run(["docker", "exec", container_name, "chown", "-R", f"{username}:{username}", f"/home/{username}"], check=True)
-        subprocess.run(["docker", "exec", container_name, "chmod", "755", f"/home/{username}"], check=True)
+        # IMPORTANT: Reconfigure HDFS to use mounted volume for persistence
+        print("Reconfiguring HDFS to use persistent storage...")
+        
+        # Stop HDFS services
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", "stop-dfs.sh"], check=False)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", "stop-yarn.sh"], check=False)
+        time.sleep(3)
+        
+        # Create persistent HDFS directories
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", "mkdir -p /data/hdfs/namenode /data/hdfs/datanode && chmod -R 777 /data/hdfs"], check=True)
+        
+        # Backup original hdfs-site.xml and replace with new one pointing to persistent storage
+        hdfs_config = """<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>/data/hdfs/namenode</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>/data/hdfs/datanode</value>
+  </property>
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+</configuration>
+"""
+        
+        # Write config to temp file with unique name (avoid conflicts with multiple containers)
+        hdfs_config_path = f"/tmp/hdfs-site-{container_name}.xml"
+        try:
+            # Remove old file if it exists
+            if os.path.exists(hdfs_config_path):
+                os.remove(hdfs_config_path)
+        except:
+            pass
+        
+        with open(hdfs_config_path, 'w') as f:
+            f.write(hdfs_config)
+        subprocess.run(["docker", "cp", hdfs_config_path, f"{container_name}:/tmp/hdfs-site-new.xml"], check=True)
+        
+        # Clean up temp file
+        try:
+            os.remove(hdfs_config_path)
+        except:
+            pass
+        
+        # Replace the old hdfs-site.xml with the new one
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+            "cp /tmp/hdfs-site-new.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml"], check=True)
+        
+        # Check if this is a fresh HDFS setup (no existing NameNode data)
+        # If there's existing NameNode data, don't reformat - just use it
+        namenode_check = subprocess.run(
+            ["docker", "exec", container_name, "bash", "-c", 
+             "test -f /data/hdfs/namenode/current/VERSION && echo 'exists' || echo 'notfound'"],
+            capture_output=True, text=True, check=True
+        )
+        is_fresh_hdfs = "notfound" in namenode_check.stdout
+        
+        if is_fresh_hdfs:
+            # FIRST TIME: Clear DataNode storage and format NameNode
+            print("Formatting HDFS NameNode (first-time setup)...")
+            subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+                "rm -rf /data/hdfs/datanode/current"], check=True)
+            subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+                "echo 'Y' | hdfs namenode -format"], check=False)
+        else:
+            # REUSING EXISTING DATA: Don't reformat, just use existing NameNode data
+            print("Reusing existing HDFS NameNode data (no format needed)...")
+        
+        time.sleep(2)
+        
+        # Ensure all HDFS processes are fully stopped before restarting
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+            "pkill -9 -f namenode || true"], check=False)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+            "pkill -9 -f datanode || true"], check=False)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", 
+            "pkill -9 -f secondarynamenode || true"], check=False)
+        time.sleep(3)
+        
+        # Restart HDFS
+        print("Starting HDFS with persistent storage...")
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", "start-dfs.sh"], check=True)
+        
+        # Wait for HDFS to be ready again
+        print("Waiting for HDFS to be ready...")
+        for i in range(10):
+            try:
+                subprocess.run(
+                    ["docker", "exec", container_name, "hdfs", "dfs", "-ls", "/"],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print("HDFS is ready with persistent storage!")
+                break
+            except subprocess.CalledProcessError:
+                print(f"HDFS not ready yet (Attempt {i+1}/10)...")
+                time.sleep(5)
+        
+        # 1. Create the user with default home directory
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"id -u {username} > /dev/null 2>&1 || useradd -m -s /bin/bash {username}"], check=True)
+        
+        # 2. Create persistent home directory and link it
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"mkdir -p /data/home/{username} && chown {username}:{username} /data/home/{username}"], check=True)
+        
+        # Symlink /home/{username} to the persistent storage
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"rm -rf /home/{username} && ln -s /data/home/{username} /home/{username}"], check=True)
+        
+        # 3. Setup SSH keys in the persistent home directory (must be done as root for proper permissions)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"mkdir -p /home/{username}/.ssh && chmod 700 /home/{username}/.ssh"], check=True)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"echo '{pubkey_str}' > /home/{username}/.ssh/authorized_keys && chmod 600 /home/{username}/.ssh/authorized_keys"], check=True)
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"chown -R {username}:{username} /home/{username}/.ssh"], check=True)
+        
+        # Verify SSH setup
+        print(f"Verifying SSH setup for user {username}...")
+        result = subprocess.run(["docker", "exec", container_name, "bash", "-c", f"ls -la /home/{username}/.ssh/authorized_keys && cat /home/{username}/.ssh/authorized_keys"], 
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            print("✓ SSH key verified successfully")
+        else:
+            print(f"⚠ Warning: SSH key verification had issues: {result.stderr}")
 
-        # 2. Setup SSH
-        subprocess.run(["docker", "exec", "-u", username, container_name, "mkdir", "-p", f"/home/{username}/.ssh"], check=True)
-        subprocess.run(["docker", "exec", "-u", username, container_name, "chmod", "700", f"/home/{username}/.ssh"], check=True)
-        subprocess.run(["docker", "exec", "-u", username, container_name, "bash", "-c", f"echo '{pubkey_str}' >> /home/{username}/.ssh/authorized_keys"], check=True)
-        subprocess.run(["docker", "exec", "-u", username, container_name, "chmod", "600", f"/home/{username}/.ssh/authorized_keys"], check=True)
-
-        #3. Grant Sudo 
+        # 4. Grant Sudo 
         subprocess.run(["docker", "exec", container_name, "usermod", "-aG", "sudo", username], check=True)
+        
+        # 5. Create persistent storage directories for HDFS
+        print("Setting up persistent storage...")
+        subprocess.run(["docker", "exec", container_name, "bash", "-c", f"mkdir -p /data/hdfs && chmod -R 755 /data/hdfs"], check=True)
 
-        #4. Create and set ownership for the user's HDFS home directory
+        # 6. Create and set ownership for the user's HDFS home directory
         subprocess.run(["docker", "exec", container_name, "hdfs", "dfs", "-mkdir", "-p", f"/user/{username}"], check=True)
         subprocess.run(["docker", "exec", container_name, "hdfs", "dfs", "-chown", f"{username}:{username}", f"/user/{username}"], check=True)
+
+        print("Starting YARN...")
+        subprocess.run([
+            "docker", "exec", container_name,
+            "bash", "-c",
+            "grep -q YARN_RESOURCEMANAGER_USER $HADOOP_HOME/etc/hadoop/yarn-env.sh || "
+            "echo 'export YARN_RESOURCEMANAGER_USER=root' >> $HADOOP_HOME/etc/hadoop/yarn-env.sh"
+        ], check=True)
+
+        subprocess.run([
+            "docker", "exec", container_name,
+            "bash", "-c",
+            "grep -q YARN_NODEMANAGER_USER $HADOOP_HOME/etc/hadoop/yarn-env.sh || "
+            "echo 'export YARN_NODEMANAGER_USER=root' >> $HADOOP_HOME/etc/hadoop/yarn-env.sh"
+        ], check=True)
+
+        subprocess.run([
+            "docker", "exec", container_name,
+            "bash", "-c",
+            f"""
+            sed -i '/<name>yarn.nodemanager.resource.cpu-vcores<\\/name>/,/<\\/property>/d' $HADOOP_HOME/etc/hadoop/yarn-site.xml
+            sed -i '/<configuration>/a \\
+            <property>\\
+            <name>yarn.nodemanager.resource.cpu-vcores</name>\\
+            <value>1</value>\\
+            </property>' $HADOOP_HOME/etc/hadoop/yarn-site.xml
+            """
+        ], check=True)
+
+
+        subprocess.run(
+            ["docker", "exec", container_name, "bash", "-c", "start-yarn.sh"],
+            check=True
+        )
+
+        print("Waiting for YARN to be ready...")
+        yarn_ready = False
+
+        for i in range(10):
+            try:
+                subprocess.run(
+                    ["docker", "exec", container_name, "bash", "-c", "yarn node -list | grep RUNNING"],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+
+                yarn_ready = True
+                print("YARN is ready!")
+                break
+            except subprocess.CalledProcessError:
+                print(f"YARN not ready yet (Attempt {i+1}/10)...")
+                time.sleep(5)
+
+        if not yarn_ready:
+            raise RuntimeError("HDFS failed to start")
+
 
         return True, "Container Created Successfully"
 
     except Exception as e:
+        # Try to clean up the container if it was created
+        try:
+            if 'container_name' in locals():
+                subprocess.run(["docker", "rm", "-f", container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
         return False, str(e)

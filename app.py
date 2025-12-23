@@ -7,6 +7,7 @@ import os
 import json
 import shutil
 from werkzeug.security import generate_password_hash, check_password_hash
+import fcntl
 
 
 # Import our custom helper functions from utils.py
@@ -14,6 +15,7 @@ from utils import get_available_resources, parse_memory_to_mb, get_all_container
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+app.config['SESSION_COOKIE_NAME'] = 'user_session'
 USERS_FILE = "users.json"
 
 # Function to help to find if user has a container
@@ -126,9 +128,9 @@ def dashboard():
             # We look for the part mapping to port 22 inside the container
             if '->22' in p:
                 try:
-                    # Get the part before "->" (e.g. 0.0.0.0:2501)
+                    # Get the part before "->" (e.g., 0.0.0.0:2501)
                     host_side = p.split('->')[0]
-                    # Get the part after the last colon (e.g. 2501)
+                    # Get the part after the last colon (e.g., 2501)
                     ssh_port = host_side.split(':')[-1]
                 except:
                     ssh_port = "Unknown"
@@ -175,8 +177,10 @@ def setup_user_disk(username, size_gb=5):
     disk_image = os.path.join(base_dir, 'user_data', f"{username}.img")
 
     # 1. Create the folder where we will mount the disk
+    print("create user file")
     os.makedirs(user_folder, exist_ok=True)
 
+    print("user file ok")
     # 2. Check if the disk image already exists
     if not os.path.exists(disk_image):
         print(f"Creating {size_gb}GB disk for {username}...")
@@ -245,22 +249,25 @@ def delete_disk():
 @app.route('/request', methods=['POST'])
 def create_container():
     if 'username' not in session: return redirect(url_for('login'))
-    
     username = session['username']
     cpus_str = request.form['cpus']
     ram = request.form['Ram']
-    memory = request.form['memory']
-
-    # --- 1. Resource Validation (From your original code) ---
-    available = get_available_resources()
-    ram_str = f"{ram}g"
-    
-    if float(cpus_str) > available['cores_available'] or int(ram) > available['ram_available_gb'] or int(memory) > available['host_free_disk_gb']:
-        return "Insufficient Resources", 400
-
-
-    success, msg = provision_container(username, cpus_str, memory, ram_str)
-
+    try:
+        memory = request.form['memory_old']
+    except KeyError:
+        memory = request.form['memory_new']
+    print(memory)
+    # --- ATOMIC RESOURCE VALIDATION ---
+    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'request.lock')
+    with open(lock_path, 'w') as lockfile:
+        fcntl.flock(lockfile, fcntl.LOCK_EX)
+        available = get_available_resources()
+        ram_str = f"{ram}g"
+        if float(cpus_str) > available['cores_available'] or int(ram) > available['ram_available_gb'] or int(float(memory)) > available['host_free_disk_gb']:
+            fcntl.flock(lockfile, fcntl.LOCK_UN)
+            return "Insufficient Resources", 400
+        success, msg = provision_container(username, cpus_str, memory, ram_str)
+        fcntl.flock(lockfile, fcntl.LOCK_UN)
     if success:
         return redirect(url_for('dashboard'))
     else:
@@ -272,20 +279,23 @@ def request_special():
     if 'username' not in session: return redirect(url_for('login'))
     
     username = session['username']
-    cpus = request.form['cpus']
-    ram = request.form['ram']
-    memory_gb = request.form['memory']
-    reason = request.form['reason']
+    cpus = request.form.get('cpus')
+    ram = request.form.get('ram')
+    memory_gb = request.form.get('memory')
+    reason = request.form.get('reason')
     
-    available = get_available_resources()
+    # Validate that all required fields are present
+    if not cpus or not ram or not memory_gb or not reason:
+        return "Missing required fields", 400
+    
+    # For special requests, we allow submission even if resources are insufficient
+    # The admin will validate and approve when resources become available
     ram_str = f"{ram}g"
-    if float(cpus) > available['cores_available'] or int(ram) > available['ram_available_gb'] or int(memory_gb) > available['host_free_disk_gb']:
-        return "Insufficient Resources", 400
-
+    
     # Save to JSON
     save_resource_request(username, cpus, memory_gb, ram_str, reason)
     
-    # You might want to pass a "success" flag to dashboard
+    # Redirect back to dashboard
     return redirect(url_for('dashboard'))
 
 @app.route('/control/<action>', methods=['POST'])

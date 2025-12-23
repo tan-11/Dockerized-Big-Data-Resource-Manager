@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# 0. Clean up stale PID files from previous runs to ensure services start correctly.
+echo "--- Cleaning up stale PID files ---"
+rm -f /tmp/*.pid
+
 # 1. Start the SSH service in the background.
 echo "--- Starting SSH Server ---"
 /usr/sbin/sshd
