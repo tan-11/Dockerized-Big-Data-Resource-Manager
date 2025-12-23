@@ -8,7 +8,16 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
         .btn { padding: 5px 10px; color: white; border: none; cursor: pointer; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
+    <script>
+        function disableButton(button) {
+            button.disabled = true;
+            button.style.opacity = '0.6';
+            button.style.cursor = 'not-allowed';
+            button.form.submit();
+        }
+    </script>
 </head>
 <body>
     <h1>Pending Resource Requests</h1>
@@ -31,15 +40,15 @@
             <tr>
                 <td>{{ user }}</td>
                 <td>{{ req.cpu }}</td>
-                <td>{{ req.memory_gb }} MB</td>
-                <td>{{ req.ram_gb }} MB</td>
+                <td>{{ req.memory_gb }}g</td>
+                <td>{{ req.ram_gb }}</td>
                 <td>{{ req.reason }}</td>
                 <td>
                     <form action="/approve/{{ user }}" method="POST" style="display:inline;">
-                        <button class="btn" style="background: green;">Approve</button>
+                        <button type="button" class="btn" style="background: green;" onclick="disableButton(this)">Approve</button>
                     </form>
                     <form action="/reject/{{ user }}" method="POST" style="display:inline;">
-                        <button class="btn" style="background: red;">Reject</button>
+                        <button type="button" class="btn" style="background: red;" onclick="disableButton(this)">Reject</button>
                     </form>
                 </td>
             </tr>

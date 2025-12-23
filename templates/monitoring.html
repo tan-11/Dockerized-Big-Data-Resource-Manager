@@ -108,12 +108,230 @@
             font-size: 15px;
             color: #777;
         }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .chart-box {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        }
+
+        .chart-box h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            max-height: 250px;
+        }
+
+        .chart-legend {
+            margin-top: 15px;
+            font-size: 13px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .legend-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            margin-right: 8px;
+            display: inline-block;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
 </head>
 <body>
     <a href="/logout" class="home-link">Logout</a>
     <a href="/settings" class="home-link" style="background-color: #e67e22;">Global Limits</a>
     <a href="/requests" class="home-link" style="background-color:#12ed42">Super User Request</a>
+    <a href="/storage" class="home-link" style="background-color: #e61111;">User Storage</a>
+    <form action="/delete_all_containers" method="POST" onsubmit="return confirm('⚠️ DANGER: This will STOP and DELETE every active user container.\n\nUser data on disks will be safe, but their current sessions will close.\n\nAre you sure?');">
+        <button type="submit" style="background-color: #c0392b; color: white; border: none; padding: 12px 20px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+            Terminate ALL Containers
+        </button>
+    </form>
+    
+    <h2>System Resources Overview</h2>
+    <div class="charts-container">
+        <!-- CPU Resources Chart -->
+        <div class="chart-box">
+            <h3>CPU Resources</h3>
+            <div class="chart-wrapper">
+                <canvas id="cpuChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #1976d2;"></span>Available</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(cores_available) }} cores</span>
+                </div>
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #ffb3ba;"></span>In Use</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(host_total_cores - cores_available) }} cores</span>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; text-align: center; color: #666;">
+                    <strong>Total: {{ host_total_cores }} cores</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- RAM Resources Chart -->
+        <div class="chart-box">
+            <h3>RAM Resources</h3>
+            <div class="chart-wrapper">
+                <canvas id="ramChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #7b1fa2;"></span>Available</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(ram_available_gb) }} GB</span>
+                </div>
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #ffb3ba;"></span>In Use</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(host_total_ram_gb - ram_available_gb) }} GB</span>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; text-align: center; color: #666;">
+                    <strong>Total: {{ "%.1f"|format(host_total_ram_gb) }} GB</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disk Resources Chart -->
+        <div class="chart-box">
+            <h3>Disk Resources</h3>
+            <div class="chart-wrapper">
+                <canvas id="diskChart"></canvas>
+            </div>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #388e3c;"></span>Available</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(host_free_disk_gb) }} GB</span>
+                </div>
+                <div class="legend-item">
+                    <span><span class="legend-color" style="background-color: #ffb3ba;"></span>In Use</span>
+                    <span style="font-weight: 600;">{{ "%.1f"|format(host_total_disk_gb - host_free_disk_gb) }} GB</span>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; text-align: center; color: #666;">
+                    <strong>Total: {{ "%.1f"|format(host_total_disk_gb) }} GB</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CPU Chart
+        var cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        var cpuData = {
+            'available': parseFloat('{{ cores_available }}'),
+            'inUse': parseFloat('{{ host_total_cores - cores_available }}')
+        };
+        
+        new Chart(cpuCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Available', 'In Use'],
+                datasets: [{
+                    data: [cpuData.available, cpuData.inUse],
+                    backgroundColor: ['#1976d2', '#ffb3ba'],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // RAM Chart
+        var ramCtx = document.getElementById('ramChart').getContext('2d');
+        var ramData = {
+            'available': parseFloat('{{ ram_available_gb }}'),
+            'inUse': parseFloat('{{ host_total_ram_gb - ram_available_gb }}')
+        };
+        
+        new Chart(ramCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Available', 'In Use'],
+                datasets: [{
+                    data: [ramData.available, ramData.inUse],
+                    backgroundColor: ['#7b1fa2', '#ffb3ba'],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Disk Chart
+        var diskCtx = document.getElementById('diskChart').getContext('2d');
+        var diskData = {
+            'available': parseFloat('{{ host_free_disk_gb }}'),
+            'inUse': parseFloat('{{ host_total_disk_gb - host_free_disk_gb }}')
+        };
+        
+        new Chart(diskCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Available', 'In Use'],
+                datasets: [{
+                    data: [diskData.available, diskData.inUse],
+                    backgroundColor: ['#388e3c', '#ffb3ba'],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    </script>
     
     <h2>Container Monitoring</h2>
 

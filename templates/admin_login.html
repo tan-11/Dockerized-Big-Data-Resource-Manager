@@ -27,8 +27,20 @@
             padding: 10px;
             width: 100%;
         }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .error { color: red; font-size: 14px; }
     </style>
+    <script>
+        function disableButton(button) {
+            button.disabled = true;
+            button.style.opacity = '0.6';
+            button.style.cursor = 'not-allowed';
+            button.form.submit();
+        }
+    </script>
 </head>
 <body>
 
@@ -44,7 +56,7 @@
 
         <input type="password" name="password" placeholder="Password" required>
 
-        <button type="submit">Login</button>
+        <button type="button" onclick="disableButton(this)">Login</button>
     </form>
 </div>
 

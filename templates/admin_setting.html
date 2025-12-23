@@ -9,7 +9,17 @@
         .btn { padding: 10px 20px; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
         .btn-save { background-color: #c0392b; } /* Red to indicate restriction */
         .btn-cancel { background-color: #95a5a6; display: block; text-align: center; text-decoration: none; margin-top: 10px; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
+    <script>
+        function disableButton(button) {
+            button.disabled = true;
+            button.style.opacity = '0.6';
+            button.style.cursor = 'not-allowed';
+            button.textContent = 'Saving...';
+            button.form.submit();
+        }
+    </script>
 </head>
 <body>
 <div class="box">
@@ -26,7 +36,7 @@
         <label>Max RAM per User (GB):</label>
         <input type="number" name="max_ram_gb" step="1" value="{{ limits.max_ram_gb }}" required>
 
-        <button type="submit" class="btn btn-save">Save Restrictions</button>
+        <button type="button" class="btn btn-save" onclick="disableButton(this)">Save Restrictions</button>
         <a href="/" class="btn btn-cancel">Cancel</a>
     </form>
 </div>

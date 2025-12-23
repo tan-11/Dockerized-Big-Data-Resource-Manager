@@ -125,7 +125,7 @@
             <h2>Your Workspace</h2>
             <p><strong>Status:</strong> <span class="{{ 'status-running' if 'Running' in container.FullStatus else 'status-stopped' }}">{{ container.FullStatus }}</span></p>
             <p><strong>SSH Port:</strong> {{ ssh_port }}</p>
-            <p><strong>Allocated Resources:</strong> {{ container.CPUs }} Cores / {{ container.MemoryMB }} MB RAM</p>
+            <p><strong>Allocated Resources:</strong> {{ container.CPUs }} Cores / {{ container.MemoryMB / 1024 }} GB RAM</p>
             
                 <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border: 1px solid #bbdefb; margin: 15px 0;">
                     <strong>🔑 Access Key:</strong>
@@ -141,17 +141,14 @@
                 <div style="margin-top: 20px;">
                     <label style="font-weight: bold;">📋 SSH Command:</label>
                     <div style="background: #2d3436; color: #81ecec; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 14px;">
-                        # 1. Fix permission (Run once in your terminal)
-                        <br>chmod 400 ~/Downloads/{{ username }}_key.pem
-                        <br><br>
-                        # 2. Login
+                        # Login
                         <br>ssh -i ~/Downloads/{{ username }}_key.pem {{ username }}@10.123.30.37 -p {{ ssh_port }}
                     </div>
                 </div>
                 {% endif %}
 
                 <p style="color: #666; font-size: 0.9em; background: white; padding: 10px; border-radius: 4px;">
-                    💡 <em>Your data is saved in the 'workspace' folder. It persists even if you delete this container.</em>
+                    💡 <em>Download the (.pem) file and copy the ssh command into your terminal to login into your workspace. (file path may need to change)</em>
                 </p>
 
                 <div class="actions">
@@ -186,7 +183,7 @@
                         <span class="stat-value">{{ ram_available_gb|round|int }} / {{ host_total_ram_gb|round|int }} GB</span>
                     </div>
                     <div class="resource-stat-row">
-                        <span class="stat-label">Dick Storage Available:</span>
+                        <span class="stat-label">Disk Storage Available:</span>
                         <span class="stat-value">{{host_free_disk_gb|round(1)}} / {{host_total_disk_gb|round(1)}} GB</span>
                     </div>
                 </div>
@@ -211,9 +208,9 @@
                             <label>Memory (in GB) (Max {{max_mem_gb}}):</label>
                             <div style="display: flex; gap: 10px;">
                                 {% if has_existing_disk %}
-                                <input type="number" name="memory" placeholder="e.g. 5" required style="flex: 2;" min="5" max="{{max_mem_gb}}" value="{{existing_disk_size}}" disabled>
+                                <input type="number" name="memory_old" placeholder="e.g. 5" required style="flex: 2;" min="5" max="{{max_mem_gb}}" value="{{existing_disk_size}}" readonly>
                                 {% else %}
-                                <input type="number" name="memory" placeholder="e.g. 5" required style="flex: 2;" max="{{max_mem_gb}}">
+                                <input type="number" name="memory_new" placeholder="e.g. 5" required style="flex: 2;" max="{{max_mem_gb}}">
                                 {% endif %}
                             </div>
                         </div>
@@ -233,7 +230,7 @@
                                 <br><small style="color: #666;">This disk will be attached if you create a container now.</small>
                             </div>
 
-                            <form action="/delete_disk" method="POST" onsubmit="return confirm('⚠️ PERMANENT DATA LOSS WARNING ⚠️\n\nAre you sure you want to delete your persistent volume?\n\n- All files will be lost forever.\n- Your SSH keys will be deleted.\n- This cannot be undone.');">
+                            <form action="/delete_disk" method="POST" onsubmit="return confirm('⚠️ PERMANENT DATA LOSS WARNING ⚠️\n\nAre you sure you want to delete your persistent volume?\n\n- All files will be lost forever.\n- This cannot be undone.');">
                                 <button type="submit" style="background-color: #c0392b; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                                     🗑️ Delete Volume
                                 </button>
@@ -258,7 +255,8 @@
                                 <input type="number" name="cpus" placeholder="CPUs (e.g. 8)" max="{{cores_available}}" required>
                                 <input type="number" name="ram" placeholder="RAM" max="{{ram_available_gb}}" required>
                                 {% if has_existing_disk %}
-                                <input type="number" name="memory" placeholder="Memory" value="{{existing_disk_size}}"  disabled>
+                                <input type="number" name="memory" placeholder="Memory" value="{{existing_disk_size}}" style="display: none;">
+                                <input type="number" placeholder="Memory" value="{{existing_disk_size}}" disabled style="flex: 1;">
                                 {%else%}
                                 <input type="number" name="memory" placeholder="Memory" max="{{host_free_disk_gb}}" required>
                                 {%endif%}
