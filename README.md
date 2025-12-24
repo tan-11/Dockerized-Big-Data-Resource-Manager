@@ -94,6 +94,7 @@ Open your web browser and navigate to:
 6. Use "Storage Management" to view & delete storage of users.
 
 ## 7. FOLDER STRUCTURE
+```text
 /PowerDockerLab
 ├── app.py                 # Main Flask application entry point
 ├── admin.py               # Administrator routes and logic
@@ -105,3 +106,4 @@ Open your web browser and navigate to:
 ├── docker_install.txt     # Docker installation guidance
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
+```
