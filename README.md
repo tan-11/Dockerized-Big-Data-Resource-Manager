@@ -38,8 +38,8 @@ Review & follow the steps in `docker_install.txt`.
 
 ### Step 2: Clone the Repository
 ```bash
-git clone [repository_url]
-cd PowerDockerLab
+git clone [https://github.com/tan-11/Dockerized-Big-Data-Resource-Manager](https://github.com/tan-11/Dockerized-Big-Data-Resource-Manager)
+cd Dockerized-Big-Data-Resource-Manager
 ```
 
 ### Step 3: Build the Hadoop Base Image
