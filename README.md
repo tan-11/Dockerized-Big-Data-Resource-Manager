@@ -4,7 +4,7 @@
 ## 1. PROJECT OVERVIEW
 **PowerDockerLab** is a lightweight Platform-as-a-Service (PaaS) designed to automate the deployment of Big Data learning environments. Unlike traditional Virtual Machines (VMs) which are resource-heavy, this platform utilizes Docker containers to provide students with instant, isolated access to Hadoop, Kafka, and Spark clusters.
 
-The system features a "Self-Service" web portal that allows users to provision environments, manages persistent storage so data survives restarts, and enforces strict resource governance (CPU/RAM quotas) to ensure fair multi-tenant usage.
+The system features a "Self-Service" web portal that allows users to provision environments, manages persistent storage so data survives restarts, and enforces strict resource governance (CPU, RAM, & Storage quotas) to ensure fair multi-tenant usage.
 
 ---
 
