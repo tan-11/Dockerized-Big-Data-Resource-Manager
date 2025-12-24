@@ -1,67 +1,107 @@
-# Dockerized Big Data Resource Manager
+# PowerDockerLab
+### Containerized Big Data Learning Environment (PaaS)
 
-## Project Overview
-This project is an On-Premise Cloud-like Resource Sharing Platform designed to provision isolated, resource-limited Big Data environments to multiple remote users on a single host machine.
+## 1. PROJECT OVERVIEW
+**PowerDockerLab** is a lightweight Platform-as-a-Service (PaaS) designed to automate the deployment of Big Data learning environments. Unlike traditional Virtual Machines (VMs) which are resource-heavy, this platform utilizes Docker containers to provide students with instant, isolated access to Hadoop and Spark clusters.
 
-The platform uses a Flask web application for managing user accounts, resource requests, and container lifecycle. It leverages Docker to create secure, dedicated sandboxes pre-configured with a Hadoop, Spark, and Kafka stack for each approved user.
+The system features a "Self-Service" web portal that allows users to provision environments, manages persistent storage so data survives restarts, and enforces strict resource governance (CPU/RAM quotas) to ensure fair multi-tenant usage.
 
-## Features
-- User/Admin Authentication: Separate secure login for general users and administrators.
-- Resource-limited Creation System: Users can create specific CPU, RAM, and Disk space, with global resource limits adjusted by admin.
-- Automated Container Provisioning: A dedicated Docker container is created with the requested resource limits.
-- Resource-unlimied Super User requests: Users can request the CPU, RAM, and Disk space out of the limited bound, but only created after admin approved.
-- Permanent Volumes: Each container is mounted a file space in host, it will retain even container has been deleted. It will be deleted only the user choose to delete it.
-- Integrated Big Data Stack: Each user container is pre-installed and configured with:
-  - Hadoop 3.3.1 (HDFS)
-  - Apache Spark 3.2.1
-  - Apache Kafka 3.1.0
-- Secure SSH Access: Users can download an SSH private key from their dashboard to securely connect to their container.
-- User Dashboard: Control container state (Start/Stop/Delete) and view current resource allocation.
-- Admin Panel:
-  - Set Global Resource Limits to prevent resource over-commitment.
-  - Monitor all active containers and overall host resource utilization.
-  - Approve or Reject pending super user resource requests.
+---
 
-## Technology Stack
-| Component | Technology | Role |
-|:-------------|:-------------|:-------------|
-| Backend Framework | Python, Flask | Web Application, User/Admin Logic, Container Management |
-|Containerization | Docker | Isolation, Resource Limiting, Environment Setup |
-| System Info	| psutil, sdutil | Monitoring host and container resources. |
-| Frontend | HTML, CSS, Jinja2 | User Dashboard and Admin Control Panels. |
+## 2. KEY FEATURES
+* **Self-Service Web Portal:** Minimalist Flask-based UI for one-click container provisioning.
+* **Automated Big Data Stack:** Instantly deploys pre-configured Hadoop (HDFS), Spark, and Kafka containers.
+* **Resource Governance:**
+    * Enforces global CPU and RAM limits per user to prevent host exhaustion.
+    * Locking mechanism to handle concurrent user requests safely.
+* **Data Persistence:** "Host-Path" volume binding ensures student data is saved to the host disk (`/user_data`) and persists across sessions.
+* **Admin Dashboard:**
+    * Real-time monitoring of host resources (CPU/RAM/Disk).
+    * Ability to terminate non-compliant containers.
+    * Approval workflow for "Super User" high-resource requests.
+* **Security:** SSH Key-based authentication for container access.
 
-## Architecture and Flow
-The application runs on a dedicated host machine, acting as the resource manager and Docker controller.
-1. User Request: For limited-resources request, the user can create directly the container by sending the resources-demand (CPUs, RAM, MEMORY) in the limited bound. For super user request (out of bound resources), the user can requests by sending the resorces-demand (not exceed to host available resources) and waiting for admin approval.
-2. Admin Approval: The Administrator approves the super user's request via the dedicated Admin Panel.
-3. Container Provisioning: The Flask backend (utils.py) executes Docker commands to:
-  - Create a new Docker container using the pre-built bigdata-user-env image (defined by Dockerfile.hadoop).
-  - Set resource limits (CPU, RAM, MEMORY).
-  - Generate a unique SSH key pair for the user and inject the public key into the container.
-  - Set up a persistent Docker volume to store user data (/user_data/{username}).
-  - Set up the big data stack
-4. User Access: The user downloads their private key and connects securely via SSH to the exposed port of their specific container. The container's entrypoint.sh automatically starts HDFS, Spark, and Kafka on startup, providing an immediate working environment.
+---
 
-## Setup and Installation
-### Prerequisites
-- Host OS: Linux (Ubuntu/Debian recommended for Docker and shell scripts).
-- Docker: Docker Engine installed and running. The user running the Flask app must have permissions to execute docker commands.
-- Python: Python 3.x and pip.
+## 3. SYSTEM REQUIREMENTS
+* **Operating System:** Linux
+* **Container Engine:** Docker Engine (v20.10+)
+* **Language Runtime:** Python 3.8+
+* **Dependencies:** See `requirements.txt`
 
-## Usage
-### Admin Access (run by "python3 admin.py")
-1. Navigate to the Admin Login page (URL will depend on your host setup). 
-2. Default Credentials (Change for production):
-  - Username: admin
-  - Password: 123456
-3. From the Admin Dashboard (admin.py routes):
-  - Monitoring: View, Stop, Delete status of all running containers.
-  - Requests: Approve or reject pending super user resource requests.
-  - Settings: Set the Global Resource Limits for any single user.
+---
 
-### User Access (run by "python3 app.py")
-1. Register/Login: Create an account on the main application page.
-2. Request Resources: Submit a request for the required CPU/RAM/Disk resources on the Dashboard page.
-3. Wait for Approval (only super request): For super request, the request moves to a pending state until approved by the Admin.
-4. Start Container & Download Key: Once approved or created, the system will provide a private key file (.pem) and ssh code.
-5. SSH into Container: Downloaded key and copy & paste the ssh code to terminal (path of key may needs to change) to connect securely to the provisioned container. 
+## 4. INSTALLATION & SETUP
+
+### Step 1: Install System Dependencies
+Review & follow the steps in `docker_install.txt`.
+
+### Step 2: Clone the Repository
+```bash
+git clone [repository_url]
+cd PowerDockerLab
+```
+
+### Step 3: Build the Hadoop Base Image
+```bash
+docker build -t hadoop_container -f Dockerfile.hadoop .
+```
+
+### Step 4: Install Python Libraries
+```bash
+pip install -r requirements.txt
+```
+
+### Step 5: Configure Docker Permissions
+Ensure the user running the app has permission to talk to the Docker Daemon:
+```bash
+sudo usermod -aG docker $USER
+```
+
+## 5. RUNNING THE APPLICATION
+### 1. Start the Flask Middleware
+Run the applications in the background:
+```bash
+sudo python3 app.py &
+sudo python3 admin.py &
+```
+
+### 2. Access the Web Portal
+Open your web browser and navigate to:
+- User Site: http://localhost:5000
+- Admin Site: http://localhost:7000
+
+## 6. USAGE GUIDE
+[Student Workflow]
+1. Log in using student credentials.
+2. Check "Host Status" on the dashboard to see available resources.
+3. Enter desired resource limits (must be within Global Limits).
+4. Click "Create Container".
+5. Wait for the success message containing your IP, SSH Port, and SSH command line.
+6. Connect via Terminal: copy and paste the provided SSH command.
+
+[Super User Request]
+1. If standard limits are insufficient (e.g., for AI/ML training), fill out the "Super User Request" form on the dashboard.
+2. Wait for Administrator approval.
+3. Once approved, launch the high-performance container.
+
+[Administrator Workflow]
+1. Log in via the Admin Login page.
+2. Monitor "System Resources Overview" (Pie Charts).
+3. View "Pending Resource Requests" to Approve/Reject Super User applications.
+4. Use "Container Monitoring" to Stop/Kill zombies or abusive containers.
+5. Manage "Global Limits" to set the hard cap for standard users.
+6. Use "Storage Management" to view & delete storage of users.
+
+## 7. FOLDER STRUCTURE
+/PowerDockerLab
+├── app.py                 # Main Flask application entry point
+├── admin.py               # Administrator routes and logic
+├── utils.py               # Helper functions (Resource checks, locking)
+├── templates/             # HTML files (Dashboard, Login, Admin)
+├── user_data/             # Persistent storage mount points for users (created on first run)
+├── entrypoint.sh          # Shell script for container startup initialization
+├── Dockerfile.hadoop      # Docker configuration for Big Data nodes
+├── docker_install.txt     # Docker installation guidance
+├── requirements.txt       # Python dependencies
+└── README.md              # This file
